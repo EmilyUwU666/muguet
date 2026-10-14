@@ -35,12 +35,23 @@ public func muguetMemoryEntitled() -> Int32 { hasMemoryEntitlement().map { $0 ? 
 let configURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     .appendingPathComponent("config.json")
 
-enum Preset: String, CaseIterable {
-    case battery, balanced, quality, max, custom
+enum DeviceProfile {
+    static let physicalGiB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+    static let availableGiB = Double(memoryLimit()) / 1_073_741_824
 
-    var title: String { ["Battery", "Balanced", "Quality", "Max", "Custom"][Preset.allCases.firstIndex(of: self)!] }
+    // An 8 GB iPhone 15 Pro or iPad Air M3 has less RAM available to
+    // third-party apps than its installed physical memory. Start conservatively
+    // on those devices, and on larger devices with a tight app memory budget.
+    static let prefersLowMemory = physicalGiB <= 8.5 || availableGiB < 4.5
+}
+
+enum Preset: String, CaseIterable {
+    case lowMemory, battery, balanced, quality, max, custom
+
+    var title: String { ["Low Memory", "Battery", "Balanced", "Quality", "Max", "Custom"][Preset.allCases.firstIndex(of: self)!] }
     var values: (scale: Double, textures: Int, fps: Int)? {
         switch self {
+        case .lowMemory: return (0.30, 0, 30)
         case .battery: return (0.35, 0, 30)
         case .balanced: return (0.5, 0, 60)
         case .quality: return (0.75, 1, 60)
@@ -54,16 +65,18 @@ enum Preset: String, CaseIterable {
     }
 
     static let recommended: Preset = {
-        let gb = Double(memoryLimit()) / 1_073_741_824
+        let gb = DeviceProfile.availableGiB
         let family = MTLCreateSystemDefaultDevice().map { d in (7...12).last { d.supportsFamily(MTLGPUFamily(rawValue: 1000 + $0)!) } ?? 0 } ?? 0
-        if gb < 4 || family < 8 { return .battery }
-        if family >= 9 && gb >= 5 { return .quality }
+        if DeviceProfile.prefersLowMemory { return .lowMemory }
+        if family < 8 { return .battery }
+        if family >= 9 && gb >= 6 { return .quality }
         return .balanced
     }()
 }
 
 final class Settings: ObservableObject {
     @Published var preset = Preset.recommended
+    @Published var lowMemoryMode = DeviceProfile.prefersLowMemory
     @Published var mode = 2
     @Published var scale = 0.5
     @Published var fps = 60
@@ -96,12 +109,19 @@ final class Settings: ObservableObject {
         if let v = json["host"] as? Bool { host = v }
         if let v = json["server"] as? String { server = v }
         if let v = json["player_name"] as? String, !v.isEmpty { name = v }
+        if let v = json["low_memory_mode"] as? Bool { lowMemoryMode = v }
+        if lowMemoryMode {
+            preset = .lowMemory
+            noMsaa = true
+        }
     }
 
     func save() throws {
         var json = extra
-        if let v = preset.values { (scale, textures, fps) = v }
-        json["graphics_preset"] = preset.rawValue
+        let activePreset: Preset = lowMemoryMode ? .lowMemory : preset
+        if let v = activePreset.values { (scale, textures, fps) = v }
+        json["graphics_preset"] = activePreset.rawValue
+        json["low_memory_mode"] = lowMemoryMode
         json["start_mode"] = mode
         json["scale"] = scale
         json["fps_limit"] = fps
@@ -109,7 +129,7 @@ final class Settings: ObservableObject {
         json["touch_sensitivity"] = (touch * 100).rounded() / 100
         json["mute"] = mute
         json["show_fps"] = showFps
-        json["no_msaa"] = noMsaa
+        json["no_msaa"] = lowMemoryMode || noMsaa
         json["multiplayer"] = multiplayer
         json["host"] = host
         json["server"] = server.trimmingCharacters(in: .whitespaces)
@@ -198,11 +218,22 @@ struct LauncherView: View {
                     Text("Story Mode").tag(1)
                     Text("Sandbox").tag(2)
                 }
+                Toggle("Low Memory Mode", isOn: $s.lowMemoryMode)
+                    .onChange(of: s.lowMemoryMode) { enabled in
+                        if enabled {
+                            s.preset = .lowMemory
+                            s.noMsaa = true
+                        }
+                    }
+                Text("Automatically enabled for 8 GB RAM devices such as iPhone 15 Pro and iPad Air M3. Uses 30 fps, 30% resolution, normal textures and disables anti-aliasing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker("Graphics", selection: $s.preset) {
                     ForEach(Preset.allCases, id: \.self) { p in
                         Text(p == Preset.recommended ? "\(p.title) (recommended)" : p.title).tag(p)
                     }
                 }
+                .disabled(s.lowMemoryMode)
                 if s.preset != .custom {
                     Text(s.preset.summary).font(.caption).foregroundStyle(.secondary)
                 }
@@ -346,7 +377,12 @@ struct LauncherView: View {
 
     @ViewBuilder var memoryView: some View {
         let gb = Double(memoryLimit()) / 1_073_741_824
-        Text(String(format: "Memory for the game: %.1f GB", gb)).font(.caption).foregroundStyle(.secondary)
+        Text(String(format: "Available app memory: %.1f GB · Device RAM: %.1f GB", gb, DeviceProfile.physicalGiB))
+            .font(.caption).foregroundStyle(.secondary)
+        if s.lowMemoryMode {
+            Text("Low Memory Mode is active. This does not change the engine's 8 GB virtual address reservation.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
         if hasMemoryEntitlement() == false {
             Text("This build wasn't signed with the increased memory limit, so the game will likely close after a few minutes. Re-sign it with AltStore or a developer account.")
                 .font(.caption).foregroundStyle(.orange).multilineTextAlignment(.center)
