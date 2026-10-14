@@ -15,7 +15,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ch.cclerc.muguet.ios
-        PRODUCT_NAME: Muguet
+        PRODUCT_NAME: FivePort
         EXECUTABLE_NAME: muguet
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: Muguet.entitlements
