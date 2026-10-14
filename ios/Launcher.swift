@@ -76,11 +76,10 @@ enum DeviceProfile {
     }
 
     static let supportDisclaimer =
-        "FivePort performance targets: iPhone 15 Pro / Pro Max (2023) or later capable iPhones; " +
-        "iPad Air M3 (2025) or later; iPad Pro M1 (2021) or later. " +
-        "Earlier models are untested. Low Memory Mode also works on other models. " +
-        "Pro Graphics requires a 16 GB iPad Pro configuration (starting with M1-era 1 TB / 2 TB models). " +
-        "Memory and GPU limits vary by model; these are recommended tiers, not a guarantee of playability."
+        "Recommended starting devices (not a guarantee): iPhone 15 Pro / 15 Pro Max (2023) or newer iPhones with 8 GB+ RAM; " +
+        "iPad Air 5th generation / M1 (2022) or newer Air; iPad Pro M1 (2021) or newer Pro. " +
+        "16 GB iPad Pro M1/M2/M4 or newer models with ProMotion may unlock Pro Graphics (on M1/M2, 16 GB requires a 1 TB or 2 TB configuration). " +
+        "Older iPhones and standard iPads are untested. Greyed-out settings cannot be selected; actual FPS and memory limits still depend on the device and iOS."
 
 
 enum Preset: String, CaseIterable {
@@ -445,6 +444,13 @@ struct LauncherView: View {
                     Text("Troubleshooting")
                         .font(.headline)
                     Text("If the Play button does not appear, check data/manifest.json and b/<build-id>/shaders/index.json. If the screen is black, check that all game assets—not just the manifest and shaders—are present. For startup errors, open muguet-debug.log in FivePort's Files folder.")
+                    Text("Device compatibility")
+                        .font(.headline)
+                    Text(DeviceProfile.supportDisclaimer)
+                        .font(.callout)
+                    Text("Low Memory Mode: recommended for iPhone 15 Pro / Pro Max and 8 GB iPads. Quality: 8 GB RAM and 4.5 GB available app memory. Max: 12 GB RAM and 6 GB available app memory. Pro Graphics: a 16 GB iPad Pro with ProMotion and 6 GB available memory. Unsupported settings are greyed out automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text("Only import game files you have the right to use.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
