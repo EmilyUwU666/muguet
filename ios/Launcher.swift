@@ -168,13 +168,14 @@ struct LauncherView: View {
     @ObservedObject private var importer = Importer.shared
     @State private var error: String?
     @State private var picking = false
+    @State private var showingGameFileGuide = false
     @Environment(\.scenePhase) private var phase
     let play: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 16) {
-                Text("Muguet").font(.largeTitle.weight(.bold))
+                Text("FivePort").font(.largeTitle.weight(.bold))
                 if !muguet_has_game_code() {
                     Text("This build has no game code: build it with ./make-ios.sh <game.zip>.")
                         .foregroundStyle(.red).font(.callout).multilineTextAlignment(.center)
@@ -186,7 +187,9 @@ struct LauncherView: View {
                     memoryView
                     Button("Import other game data…") { picking = true }.font(.caption)
                 }
-                Text("proudly made by c22dev").font(.caption).foregroundStyle(.secondary)
+                Button("How to set up game files") { showingGameFileGuide = true }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
             }
             .padding(24)
             .frame(maxWidth: .infinity)
@@ -256,6 +259,7 @@ struct LauncherView: View {
             .frame(maxWidth: .infinity)
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showingGameFileGuide) { gameFileGuide }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.zip]) { result in
             if case .success(let url) = result { importer.run(url) }
         }
@@ -275,10 +279,68 @@ struct LauncherView: View {
                 ForEach(importer.local, id: \.self) { url in
                     Button("Import \(url.lastPathComponent)") { importer.run(url) }
                 }
-                Text("If the picker doesn't work, move the zip to Files → On My iPhone → Muguet and it will show up here.")
+                Text("If the picker doesn't work, move the zip to Files → On My iPhone → FivePort and it will show up here.")
                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             if let e = importer.error { Text(e).foregroundStyle(.red).font(.callout).multilineTextAlignment(.center) }
+        }
+    }
+
+    @ViewBuilder var gameFileGuide: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("FivePort requires game files you provide yourself. Use data prepared for this port and matching your game build.")
+                        .font(.callout)
+
+                    Text("Option 1: Import a ZIP (recommended)")
+                        .font(.headline)
+                    Text("Create a ZIP containing a data folder and a b folder. The data folder must include manifest.json and all files it references. The b folder must contain your build's shaders/index.json and shader pack files.")
+                    Text("In the launcher, tap “Import game data .zip” or “Import other game data…”, select the ZIP from Files, and wait for the import to finish. Keep FivePort open until it completes.")
+
+                    Text("Option 2: Copy folders manually")
+                        .font(.headline)
+                    Text("Open Files → On My iPhone → FivePort → game. Put data and b directly inside game, like this:")
+                    Text("""
+                    game/
+                      data/
+                        manifest.json
+                        common/
+                        x64/
+                        ...other game assets
+                      b/
+                        <build-id>/
+                          shaders/
+                            index.json
+                            pack*.bin
+                    """)
+                    .font(.system(.footnote, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(10)
+                    Text("Important: Avoid an extra nested game/game folder. Keep each shader pack in the same shaders folder as index.json. Use the original build folder name.")
+
+                    Text("Do I need game.wasm?")
+                        .font(.headline)
+                    Text("The FivePort TestFlight build already includes the native game engine, so the separate game.wasm file normally is not needed in the game folder. Other builds may require it.")
+
+                    Text("Troubleshooting")
+                        .font(.headline)
+                    Text("If the Play button does not appear, check data/manifest.json and b/<build-id>/shaders/index.json. If the screen is black, check that all game assets—not just the manifest and shaders—are present. For startup errors, open muguet-debug.log in FivePort's Files folder.")
+                    Text("Only import game files you have the right to use.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(20)
+            }
+            .navigationTitle("Game file setup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showingGameFileGuide = false }
+                }
+            }
         }
     }
 
