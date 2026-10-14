@@ -2,6 +2,21 @@
 
 FivePort is a custom iOS build based on [Muguet](https://github.com/c22dev/muguet) by Constantin Clerc (c22dev). The original open-source license and contributors' credits are retained. This fork preserves the native Mach-O/Metal port and multiplayer support.
 
+## Performance and low-memory support (iPhone 15 Pro and iPad Air M3)
+
+FivePort has **automatic Low Memory Mode** for iPhone/iPad models with approximately 8 GB of RAM or less, and devices with limited app memory. This includes the iPhone 15 Pro and iPad Air M3. The launcher also lets you toggle the mode manually if you want to experiment.
+
+When enabled, it uses:
+- **30% rendering resolution** (minimum output size and aspect-ratio rules still apply)
+- **Normal textures** (texture-quality setting 0)
+- **30 fps** frame limit
+- **MSAA/TXAA disabled**
+- **Conservative startup settings** even if older `config.json` values were left behind
+
+Higher-memory devices retain the existing Balanced/Quality graphics defaults. To turn off Low Memory Mode and select your own graphics preset, use the toggle on the launcher. Low Memory Mode makes the app less demanding but cannot guarantee that the game runs within iOS's process memory limit; if you experience a crash, check the on-device `muguet-debug.log` and iOS analytics.
+
+The TestFlight version still uses an **8 GiB virtual Wasmtime memory reservation** that must match its embedded precompiled game code. Virtual reservation is not the same as physical RAM consumption. The reservation is deliberately left unchanged; selecting Low Memory Mode adjusts rendering workload and in-game textures, not that engine reservation.
+
 ## Set up your game files on iPhone or iPad
 
 FivePort does **not** download or provide GTA V game assets. You must supply files you have the rights to use, prepared for the compatible WebAssembly game port.
@@ -11,7 +26,7 @@ FivePort does **not** download or provide GTA V game assets. You must supply fil
 1. In Files, find a ZIP containing `data/` and `b/<build-id>/shaders/`. The `data/` folder must contain `manifest.json` and all the assets referenced by that manifest; `shaders/` must contain `index.json` and its required shader packs.
 2. Open FivePort's launcher and choose **Import game data .zip**. Select the ZIP from Files and wait until the import completes. Keep the app open during import.
 3. If the file picker cannot access your ZIP, copy the ZIP to **Files → On My iPhone → FivePort**, reopen the launcher, and select the newly listed ZIP.
-4. When the launcher says the game data is ready, choose **Play**. For first-time troubleshooting, select **Battery** graphics and enable **Show frame rate**.
+4. When the launcher says the game data is ready, choose **Play**. For first-time troubleshooting on devices with 8 GB RAM or less, leave **Low Memory Mode** on and enable **Show frame rate**.
 
 **Alternative: copy the extracted folders manually**
 
