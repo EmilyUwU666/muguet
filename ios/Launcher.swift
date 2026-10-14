@@ -130,6 +130,9 @@ final class Settings: ObservableObject {
             noMsaa = true
         } else if proGraphicsMode {
             preset = .pro
+            // High-end devices can try MSAA/TXAA; the user can still switch
+            // anti-aliasing back off manually after the first launch.
+            if json["no_msaa"] == nil { noMsaa = false }
         } else if preset == .pro {
             // A config imported from another device should never force Pro mode.
             preset = .balanced
@@ -256,6 +259,7 @@ struct LauncherView: View {
                             if enabled {
                                 s.lowMemoryMode = false
                                 s.preset = .pro
+                                s.noMsaa = false
                             } else if s.preset == .pro {
                                 s.preset = .quality
                             }
