@@ -96,7 +96,7 @@ final class Settings: ObservableObject {
     @Published var touch = 1.0
     @Published var mute = false
     @Published var showFps = false
-    @Published var noMsaa = true
+    @Published var noMsaa = !DeviceProfile.prefersProGraphics
     @Published var multiplayer = false
     @Published var host = false
     @Published var server = ""
