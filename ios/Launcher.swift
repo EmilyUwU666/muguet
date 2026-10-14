@@ -43,12 +43,20 @@ enum DeviceProfile {
     // third-party apps than its installed physical memory. Start conservatively
     // on those devices, and on larger devices with a tight app memory budget.
     static let prefersLowMemory = physicalGiB <= 8.5 || availableGiB < 4.5
+
+    // The high-end mode is intended for 16 GB iPad Pro configurations,
+    // including M1/M2/M4 models, with enough app memory and a ProMotion screen.
+    static let eligibleProGraphics = UIDevice.current.userInterfaceIdiom == .pad
+        && physicalGiB >= 15.0
+        && UIScreen.main.maximumFramesPerSecond >= 120
+    static let prefersProGraphics = eligibleProGraphics
+        && !prefersLowMemory && availableGiB >= 6.0
 }
 
 enum Preset: String, CaseIterable {
-    case lowMemory, battery, balanced, quality, max, custom
+    case lowMemory, battery, balanced, quality, max, pro, custom
 
-    var title: String { ["Low Memory", "Battery", "Balanced", "Quality", "Max", "Custom"][Preset.allCases.firstIndex(of: self)!] }
+    var title: String { ["Low Memory", "Battery", "Balanced", "Quality", "Max", "Pro (16 GB iPad)", "Custom"][Preset.allCases.firstIndex(of: self)!] }
     var values: (scale: Double, textures: Int, fps: Int)? {
         switch self {
         case .lowMemory: return (0.30, 0, 30)
@@ -56,18 +64,21 @@ enum Preset: String, CaseIterable {
         case .balanced: return (0.5, 0, 60)
         case .quality: return (0.75, 1, 60)
         case .max: return (1.0, 2, 60)
+        case .pro: return (1.0, 2, 0) // uncapped engine; iPad Pro refresh is held at up to 120 Hz
         case .custom: return nil
         }
     }
     var summary: String {
         guard let v = values else { return "" }
-        return "\(Int(v.scale * 100)) % resolution · \(["Normal", "High", "Very High"][v.textures]) textures · \(v.fps) fps"
+        let fpsText = v.fps == 0 ? "Uncapped (up to 120 Hz)" : "\(v.fps) fps"
+        return "\(Int(v.scale * 100)) % resolution · \(["Normal", "High", "Very High"][v.textures]) textures · \(fpsText)"
     }
 
     static let recommended: Preset = {
         let gb = DeviceProfile.availableGiB
         let family = MTLCreateSystemDefaultDevice().map { d in (7...12).last { d.supportsFamily(MTLGPUFamily(rawValue: 1000 + $0)!) } ?? 0 } ?? 0
         if DeviceProfile.prefersLowMemory { return .lowMemory }
+        if DeviceProfile.prefersProGraphics { return .pro }
         if family < 8 { return .battery }
         if family >= 9 && gb >= 6 { return .quality }
         return .balanced
@@ -77,6 +88,7 @@ enum Preset: String, CaseIterable {
 final class Settings: ObservableObject {
     @Published var preset = Preset.recommended
     @Published var lowMemoryMode = DeviceProfile.prefersLowMemory
+    @Published var proGraphicsMode = DeviceProfile.prefersProGraphics
     @Published var mode = 2
     @Published var scale = 0.5
     @Published var fps = 60
@@ -110,18 +122,27 @@ final class Settings: ObservableObject {
         if let v = json["server"] as? String { server = v }
         if let v = json["player_name"] as? String, !v.isEmpty { name = v }
         if let v = json["low_memory_mode"] as? Bool { lowMemoryMode = v }
+        if let v = json["pro_graphics_mode"] as? Bool { proGraphicsMode = v }
+        proGraphicsMode = proGraphicsMode && DeviceProfile.eligibleProGraphics
         if lowMemoryMode {
+            proGraphicsMode = false
             preset = .lowMemory
             noMsaa = true
+        } else if proGraphicsMode {
+            preset = .pro
+        } else if preset == .pro {
+            // A config imported from another device should never force Pro mode.
+            preset = .balanced
         }
     }
 
     func save() throws {
         var json = extra
-        let activePreset: Preset = lowMemoryMode ? .lowMemory : preset
+        let activePreset: Preset = lowMemoryMode ? .lowMemory : (proGraphicsMode && DeviceProfile.eligibleProGraphics ? .pro : preset)
         if let v = activePreset.values { (scale, textures, fps) = v }
         json["graphics_preset"] = activePreset.rawValue
         json["low_memory_mode"] = lowMemoryMode
+        json["pro_graphics_mode"] = proGraphicsMode && !lowMemoryMode && DeviceProfile.eligibleProGraphics
         json["start_mode"] = mode
         json["scale"] = scale
         json["fps_limit"] = fps
@@ -221,6 +242,7 @@ struct LauncherView: View {
                 Toggle("Low Memory Mode", isOn: $s.lowMemoryMode)
                     .onChange(of: s.lowMemoryMode) { enabled in
                         if enabled {
+                            s.proGraphicsMode = false
                             s.preset = .lowMemory
                             s.noMsaa = true
                         }
@@ -228,12 +250,26 @@ struct LauncherView: View {
                 Text("Automatically enabled for 8 GB RAM devices such as iPhone 15 Pro and iPad Air M3. Uses 30 fps, 30% resolution, normal textures and disables anti-aliasing.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if DeviceProfile.eligibleProGraphics {
+                    Toggle("Pro Graphics (16 GB iPad Pro)", isOn: $s.proGraphicsMode)
+                        .onChange(of: s.proGraphicsMode) { enabled in
+                            if enabled {
+                                s.lowMemoryMode = false
+                                s.preset = .pro
+                            } else if s.preset == .pro {
+                                s.preset = .quality
+                            }
+                        }
+                    Text("High-end profile: native-scale rendering (up to the engine's resolution cap), Very High textures and uncapped frames on ProMotion displays. Higher battery and memory use.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Picker("Graphics", selection: $s.preset) {
-                    ForEach(Preset.allCases, id: \.self) { p in
+                    ForEach(Preset.allCases.filter { $0 != .pro || DeviceProfile.eligibleProGraphics }, id: \.self) { p in
                         Text(p == Preset.recommended ? "\(p.title) (recommended)" : p.title).tag(p)
                     }
                 }
-                .disabled(s.lowMemoryMode)
+                .disabled(s.lowMemoryMode || s.proGraphicsMode)
                 if s.preset != .custom {
                     Text(s.preset.summary).font(.caption).foregroundStyle(.secondary)
                 }
@@ -381,6 +417,9 @@ struct LauncherView: View {
             .font(.caption).foregroundStyle(.secondary)
         if s.lowMemoryMode {
             Text("Low Memory Mode is active. This does not change the engine's 8 GB virtual address reservation.")
+                .font(.caption).foregroundStyle(.secondary)
+        } else if s.proGraphicsMode {
+            Text("Pro Graphics is active. This uses more GPU memory and power; switch it off if the game slows down or closes.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         if hasMemoryEntitlement() == false {
