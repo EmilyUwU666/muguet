@@ -155,7 +155,15 @@ fn settings(cfg_path: &Path) -> Vec<String> {
         .unwrap_or_else(|| serde_json::from_str(DEFAULT_CONFIG).unwrap());
     let num = |k: &str| cfg.get(k).and_then(|v| v.as_f64());
     let flag = |k: &str| cfg.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
-    if let Some(v) = num("scale") { set_default("MUGUET_SCALE", v.to_string()); }
+    let low_memory = flag("low_memory_mode");
+    if low_memory {
+        // Clamp at engine startup as well: stale config.json values or an old
+        // graphics preset must not silently bypass the lower-memory profile.
+        eprintln!("[config] FivePort Low Memory Mode: 30% scale, normal textures, 30 fps, no AA");
+        set_default("MUGUET_SCALE", "0.30");
+    } else if let Some(v) = num("scale") {
+        set_default("MUGUET_SCALE", v.to_string());
+    }
     if let Some(v) = num("mouse_sensitivity") { set_default("MUGUET_MOUSE_SENS", v.to_string()); }
     if let Some(v) = num("touch_sensitivity") { set_default("MUGUET_TOUCH_SENS", v.to_string()); }
     if let Some(r) = cfg.get("resolution").and_then(|v| v.as_str()) { set_default("MUGUET_RES", r); }
@@ -172,7 +180,11 @@ fn settings(cfg_path: &Path) -> Vec<String> {
 
     let mut engine_args = Vec::new();
 
-    let fps = std::env::var("MUGUET_FPS").ok().and_then(|v| v.parse::<f64>().ok()).or_else(|| num("fps_limit")).unwrap_or(60.0);
+    let fps = if low_memory {
+        30.0
+    } else {
+        std::env::var("MUGUET_FPS").ok().and_then(|v| v.parse::<f64>().ok()).or_else(|| num("fps_limit")).unwrap_or(60.0)
+    };
     engine_args.push(format!("-frameLimit={}", if fps <= 0.0 { 0 } else if fps <= 30.0 { 2 } else { 1 }));
 
     let start_mode = std::env::var("MUGUET_START").ok().and_then(|v| v.parse::<f64>().ok()).or_else(|| num("start_mode")).unwrap_or(2.0) as i64;
@@ -183,7 +195,10 @@ fn settings(cfg_path: &Path) -> Vec<String> {
     if let Some(extra) = cfg.get("extra_args").and_then(|v| v.as_array()) {
         engine_args.extend(extra.iter().filter_map(|a| a.as_str().map(String::from)));
     }
-    fix_settings(num("texture_quality").map(|q| q as i64), flag("no_msaa"));
+    fix_settings(
+        if low_memory { Some(0) } else { num("texture_quality").map(|q| q as i64) },
+        low_memory || flag("no_msaa"),
+    );
     engine_args
 }
 
