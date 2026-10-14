@@ -150,7 +150,7 @@ fn main() -> Result<()> {
         Ok(s) => s,
         Err(e) => {
             eprintln!("[config] {e:#}");
-            alert("Muguet", &format!("{e:#}"));
+            alert("FivePort", &format!("{e:#}"));
             std::process::exit(1);
         }
     };
