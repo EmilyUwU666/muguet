@@ -156,17 +156,24 @@ fn settings(cfg_path: &Path) -> Vec<String> {
     let num = |k: &str| cfg.get(k).and_then(|v| v.as_f64());
     let flag = |k: &str| cfg.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
     let low_memory = flag("low_memory_mode");
+    let pro_graphics = flag("pro_graphics_mode") && !low_memory;
     if low_memory {
         // Clamp at engine startup as well: stale config.json values or an old
         // graphics preset must not silently bypass the lower-memory profile.
         eprintln!("[config] FivePort Low Memory Mode: 30% scale, normal textures, 30 fps, no AA");
         set_default("MUGUET_SCALE", "0.30");
+    } else if pro_graphics {
+        eprintln!("[config] FivePort Pro Graphics: 100% scale, very high textures, uncapped fps");
+        set_default("MUGUET_SCALE", "1.0");
     } else if let Some(v) = num("scale") {
         set_default("MUGUET_SCALE", v.to_string());
     }
     if let Some(v) = num("mouse_sensitivity") { set_default("MUGUET_MOUSE_SENS", v.to_string()); }
     if let Some(v) = num("touch_sensitivity") { set_default("MUGUET_TOUCH_SENS", v.to_string()); }
-    if let Some(r) = cfg.get("resolution").and_then(|v| v.as_str()) { set_default("MUGUET_RES", r); }
+    // Explicit resolution overrides would bypass both device profiles.
+    if !low_memory && !pro_graphics {
+        if let Some(r) = cfg.get("resolution").and_then(|v| v.as_str()) { set_default("MUGUET_RES", r); }
+    }
     if flag("fullscreen") { set_default("MUGUET_FULLSCREEN", "1"); }
     if flag("mute") { set_default("MUGUET_MUTE", "1"); }
     if flag("show_fps") { set_default("MUGUET_SHOW_FPS", "1"); }
@@ -182,6 +189,8 @@ fn settings(cfg_path: &Path) -> Vec<String> {
 
     let fps = if low_memory {
         30.0
+    } else if pro_graphics {
+        0.0 // Uncapped; ProMotion holds the screen refresh at up to 120 Hz.
     } else {
         std::env::var("MUGUET_FPS").ok().and_then(|v| v.parse::<f64>().ok()).or_else(|| num("fps_limit")).unwrap_or(60.0)
     };
@@ -196,7 +205,7 @@ fn settings(cfg_path: &Path) -> Vec<String> {
         engine_args.extend(extra.iter().filter_map(|a| a.as_str().map(String::from)));
     }
     fix_settings(
-        if low_memory { Some(0) } else { num("texture_quality").map(|q| q as i64) },
+        if low_memory { Some(0) } else if pro_graphics { Some(2) } else { num("texture_quality").map(|q| q as i64) },
         low_memory || flag("no_msaa"),
     );
     engine_args
