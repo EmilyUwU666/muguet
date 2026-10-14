@@ -49,9 +49,39 @@ enum DeviceProfile {
     static let eligibleProGraphics = UIDevice.current.userInterfaceIdiom == .pad
         && physicalGiB >= 15.0
         && UIScreen.main.maximumFramesPerSecond >= 120
-    static let prefersProGraphics = eligibleProGraphics
-        && !prefersLowMemory && availableGiB >= 6.0
-}
+    static let supportsQuality = physicalGiB >= 7.5 && availableGiB >= 4.5
+    static let supportsMax = physicalGiB >= 11.5 && availableGiB >= 6.0
+    static let supportsProGraphics = eligibleProGraphics && availableGiB >= 6.0
+    static let prefersProGraphics = supportsProGraphics && !prefersLowMemory
+
+    // Use actual device memory and ProMotion capability, not model-name guesses.
+    // These are performance tiers for the current app, not an App Store iOS
+    // compatibility check.
+    static func supported(_ preset: Preset) -> Bool {
+        switch preset {
+        case .lowMemory, .battery, .balanced, .custom: return true
+        case .quality: return supportsQuality
+        case .max: return supportsMax
+        case .pro: return supportsProGraphics
+        }
+    }
+
+    static func requirement(_ preset: Preset) -> String? {
+        switch preset {
+        case .quality: return supportsQuality ? nil : "Requires at least 8 GB RAM and 4.5 GB available to the app"
+        case .max: return supportsMax ? nil : "Requires at least 12 GB RAM and 6 GB available to the app"
+        case .pro: return supportsProGraphics ? nil : "Requires a 16 GB iPad Pro with a 120 Hz ProMotion screen and 6 GB available app memory"
+        default: return nil
+        }
+    }
+
+    static let supportDisclaimer =
+        "FivePort performance targets: iPhone 15 Pro / Pro Max (2023) or later capable iPhones; " +
+        "iPad Air M3 (2025) or later; iPad Pro M1 (2021) or later. " +
+        "Earlier models are untested. Low Memory Mode also works on other models. " +
+        "Pro Graphics requires a 16 GB iPad Pro configuration (starting with M1-era 1 TB / 2 TB models). " +
+        "Memory and GPU limits vary by model; these are recommended tiers, not a guarantee of playability."
+
 
 enum Preset: String, CaseIterable {
     case lowMemory, battery, balanced, quality, max, pro, custom
@@ -123,7 +153,7 @@ final class Settings: ObservableObject {
         if let v = json["player_name"] as? String, !v.isEmpty { name = v }
         if let v = json["low_memory_mode"] as? Bool { lowMemoryMode = v }
         if let v = json["pro_graphics_mode"] as? Bool { proGraphicsMode = v }
-        proGraphicsMode = proGraphicsMode && DeviceProfile.eligibleProGraphics
+        proGraphicsMode = proGraphicsMode && DeviceProfile.supportsProGraphics
         if lowMemoryMode {
             proGraphicsMode = false
             preset = .lowMemory
@@ -133,19 +163,20 @@ final class Settings: ObservableObject {
             // High-end devices can try MSAA/TXAA; the user can still switch
             // anti-aliasing back off manually after the first launch.
             if json["no_msaa"] == nil { noMsaa = false }
-        } else if preset == .pro {
-            // A config imported from another device should never force Pro mode.
+        } else if !DeviceProfile.supported(preset) {
+            // Do not restore a high-end preset saved on a different device.
             preset = .balanced
         }
     }
 
     func save() throws {
         var json = extra
-        let activePreset: Preset = lowMemoryMode ? .lowMemory : (proGraphicsMode && DeviceProfile.eligibleProGraphics ? .pro : preset)
+        let selectedPreset: Preset = proGraphicsMode && DeviceProfile.supportsProGraphics ? .pro : preset
+        let activePreset: Preset = lowMemoryMode ? .lowMemory : (DeviceProfile.supported(selectedPreset) ? selectedPreset : .balanced)
         if let v = activePreset.values { (scale, textures, fps) = v }
         json["graphics_preset"] = activePreset.rawValue
         json["low_memory_mode"] = lowMemoryMode
-        json["pro_graphics_mode"] = proGraphicsMode && !lowMemoryMode && DeviceProfile.eligibleProGraphics
+        json["pro_graphics_mode"] = proGraphicsMode && !lowMemoryMode && DeviceProfile.supportsProGraphics
         json["start_mode"] = mode
         json["scale"] = scale
         json["fps_limit"] = fps
@@ -253,27 +284,42 @@ struct LauncherView: View {
                 Text("Automatically enabled for 8 GB RAM devices such as iPhone 15 Pro and iPad Air M3. Uses 30 fps, 30% resolution, normal textures and disables anti-aliasing.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if DeviceProfile.eligibleProGraphics {
-                    Toggle("Pro Graphics (16 GB iPad Pro)", isOn: $s.proGraphicsMode)
-                        .onChange(of: s.proGraphicsMode) { enabled in
-                            if enabled {
-                                s.lowMemoryMode = false
-                                s.preset = .pro
-                                s.noMsaa = false
-                            } else if s.preset == .pro {
-                                s.preset = .quality
-                            }
+                Toggle("Pro Graphics (16 GB iPad Pro)", isOn: $s.proGraphicsMode)
+                    .disabled(!DeviceProfile.supportsProGraphics)
+                    .onChange(of: s.proGraphicsMode) { enabled in
+                        if enabled {
+                            s.lowMemoryMode = false
+                            s.preset = .pro
+                            s.noMsaa = false
+                        } else if s.preset == .pro {
+                            s.preset = DeviceProfile.supportsQuality ? .quality : .balanced
                         }
-                    Text("High-end profile: native-scale rendering (up to the engine's resolution cap), Very High textures and uncapped frames on ProMotion displays. Higher battery and memory use.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                    }
+                Text(DeviceProfile.supportsProGraphics
+                    ? "Supported: 16 GB iPad Pro with 120 Hz ProMotion. 100% scale, Very High textures and uncapped FPS; may use more battery and memory."
+                    : "Unavailable on this device. Requires iPad Pro M1 (2021) or newer with 16 GB RAM, 120 Hz ProMotion and at least 6 GB available app memory. On some models 16 GB depends on storage.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Picker("Graphics", selection: $s.preset) {
-                    ForEach(Preset.allCases.filter { $0 != .pro || DeviceProfile.eligibleProGraphics }, id: \.self) { p in
-                        Text(p == Preset.recommended ? "\(p.title) (recommended)" : p.title).tag(p)
+                    ForEach(Preset.allCases, id: \.self) { p in
+                        Text(p == Preset.recommended ? "\(p.title) (recommended)" : p.title)
+                            .foregroundStyle(DeviceProfile.supported(p) ? Color.primary : Color.secondary.opacity(0.55))
+                            .disabled(!DeviceProfile.supported(p))
+                            .tag(p)
                     }
                 }
                 .disabled(s.lowMemoryMode || s.proGraphicsMode)
+                ForEach([Preset.quality, .max, .pro], id: \.self) { p in
+                    if let reason = DeviceProfile.requirement(p) {
+                        Text("\(p.title) — unavailable: \(reason)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(DeviceProfile.supportDisclaimer)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 if s.preset != .custom {
                     Text(s.preset.summary).font(.caption).foregroundStyle(.secondary)
                 }
