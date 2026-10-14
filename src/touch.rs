@@ -161,21 +161,36 @@ fn fps_label(o: &Overlay) -> Option<Retained<AnyObject>> {
 }
 
 fn fps_tick(o: &Overlay) {
+    // Launcher settings are applied after this overlay is installed. Do not
+    // permanently disable the FPS label during the first pre-launch refresh.
+    let enabled = std::env::var("MUGUET_SHOW_FPS").map(|v| v != "0").unwrap_or(false);
     let now_presents = crate::gpu::PRESENTS.load(std::sync::atomic::Ordering::Relaxed);
-    if now_presents == 0 { return; }
     FPS.with(|cell| {
         let mut f = cell.borrow_mut();
-        if let Fps::Unset = *f {
-            let on = std::env::var("MUGUET_SHOW_FPS").map(|v| v != "0").unwrap_or(false);
-            *f = match (on, on.then(|| fps_label(o)).flatten()) {
-                (true, Some(label)) => Fps::On { label, at: std::time::Instant::now(), presents: now_presents },
-                _ => Fps::Off,
+        if !enabled {
+            if let Fps::On { label, .. } = &*f { set_hidden(label, true); }
+            *f = Fps::Off;
+            return;
+        }
+        if !matches!(&*f, Fps::On { .. }) {
+            *f = match fps_label(o) {
+                Some(label) => {
+                    set_text(&label, "0 fps");
+                    Fps::On { label, at: std::time::Instant::now(), presents: now_presents }
+                }
+                None => Fps::Unset,
             };
         }
         if let Fps::On { label, at, presents } = &mut *f {
+            if now_presents == 0 {
+                // Explicitly show stalled rendering rather than silently
+                // hiding the counter until the first successfully presented frame.
+                set_text(label, "0 fps");
+                return;
+            }
             let dt = at.elapsed().as_secs_f64();
             if dt >= 0.5 {
-                set_text(label, &format!("{:.0} fps", (now_presents - *presents) as f64 / dt));
+                set_text(label, &format!("{:.0} fps", (now_presents.saturating_sub(*presents)) as f64 / dt));
                 *at = std::time::Instant::now();
                 *presents = now_presents;
             }
