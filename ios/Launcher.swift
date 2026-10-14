@@ -80,7 +80,7 @@ enum DeviceProfile {
         "iPad Air 5th generation / M1 (2022) or newer Air; iPad Pro M1 (2021) or newer Pro. " +
         "16 GB iPad Pro M1/M2/M4 or newer models with ProMotion may unlock Pro Graphics (on M1/M2, 16 GB requires a 1 TB or 2 TB configuration). " +
         "Older iPhones and standard iPads are untested. Greyed-out settings cannot be selected; actual FPS and memory limits still depend on the device and iOS."
-
+}
 
 enum Preset: String, CaseIterable {
     case lowMemory, battery, balanced, quality, max, pro, custom
