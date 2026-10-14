@@ -30,6 +30,27 @@ FivePort also detects compatible **16 GB iPad Pro** models with **120 Hz ProMoti
 
 This mode is restricted to eligible 16 GB iPad Pro-class configurations and is not automatically enabled on 8 GB devices. The iOS memory entitlement and **8 GiB Wasmtime virtual memory reservation** stay unchanged and must still match the embedded game engine. More physical RAM allows higher graphics settings, but does not guarantee 120 FPS or prevent thermal throttling, memory pressure, or crashes.
 
+## Supported hardware and greyed-out settings
+
+FivePort requires **iOS/iPadOS 15 or later** at the platform level, but that minimum OS version does **not** mean every old iPhone or iPad can run this demanding game. The following are recommended starting points for experimental testing, not confirmed playable-device guarantees:
+
+| Device family | Recommended starting generation | Automatic graphics profile |
+| --- | --- | --- |
+| iPhone | **iPhone 15 Pro / 15 Pro Max (2023)** or newer models with at least 8 GB RAM | **Low Memory** when RAM is 8 GB or available app memory is tight |
+| iPad Air | **5th generation / M1 (2022)** or newer, including M2 and M3 | **Low Memory** for 8 GB configurations |
+| iPad Pro | **M1 (2021)** or newer | **Low Memory** on 8 GB models; **Pro Graphics** only on eligible 16 GB configurations with a 120 Hz ProMotion display and enough app memory |
+| Older iPhones / standard iPads | **Not validated** | Conservative settings where possible; game may fail to launch |
+
+Not every iPad Pro from these generations has 16 GB RAM. In particular, M1/M2 Pro models generally provide 16 GB only with 1 TB or 2 TB storage. FivePort **detects physical memory and screen capabilities at runtime** rather than assuming a whole product generation qualifies.
+
+Unavailable launcher graphics options are **greyed out and cannot be selected**, with a reason shown underneath:
+- **Battery / Low Memory / Custom:** available for manual experiments (not a performance guarantee)
+- **Quality:** at least 8 GB physical RAM and 4.5 GB available app memory
+- **Max:** at least 12 GB physical RAM and 6 GB available app memory
+- **Pro Graphics:** a 16 GB iPad Pro with 120 Hz ProMotion and at least 6 GB available app memory
+
+Previously saved graphics settings from a more capable device automatically fall back to a supported preset. This only restricts FivePort's **performance recommendations**—it cannot prove compatibility with the game engine or prevent memory-pressure terminations. The build's 8 GiB virtual Wasmtime reservation stays the same on all devices.
+
 ## Set up your game files on iPhone or iPad
 
 FivePort does **not** download or provide GTA V game assets. You must supply files you have the rights to use, prepared for the compatible WebAssembly game port.
