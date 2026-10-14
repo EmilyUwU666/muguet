@@ -247,7 +247,7 @@ fn load_module(engine: &Engine, _startup: &config::Startup) -> Result<Module> {
 
 #[cfg(all(not(feature = "jit"), target_os = "ios", game_code))]
 std::arch::global_asm!(
-    ".section __TEXT,__muguet_code,regular,pure_instructions",
+    ".section __TEXT,__muguet_code,regular",
     ".p2align 14",
     "_muguet_game_code:",
     concat!(".incbin \"", env!("MUGUET_GAME_CODE"), "\""),
