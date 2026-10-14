@@ -17,6 +17,19 @@ Higher-memory devices retain the existing Balanced/Quality graphics defaults. To
 
 The TestFlight version still uses an **8 GiB virtual Wasmtime memory reservation** that must match its embedded precompiled game code. Virtual reservation is not the same as physical RAM consumption. The reservation is deliberately left unchanged; selecting Low Memory Mode adjusts rendering workload and in-game textures, not that engine reservation.
 
+## High-end graphics for 16 GB iPad Pro
+
+FivePort also detects compatible **16 GB iPad Pro** models with **120 Hz ProMotion** and enough iPadOS app memory to use a higher graphics profile.
+
+**Pro Graphics (16 GB iPad Pro)** is automatically suggested/enabled on eligible devices. This adds a separate **Pro (16 GB iPad)** graphics preset:
+- **100% rendering resolution**, subject to the game's 2560 × 1440 internal rendering cap
+- **Very High** texture quality
+- **Uncapped game frame rate**, with screen refresh up to 120 Hz; actual FPS will vary
+- **Optional MSAA/TXAA**, enabled by default on a fresh Pro configuration
+- A launcher toggle to turn Pro Graphics off and choose Balanced, Quality or Max instead
+
+This mode is restricted to eligible 16 GB iPad Pro-class configurations and is not automatically enabled on 8 GB devices. The iOS memory entitlement and **8 GiB Wasmtime virtual memory reservation** stay unchanged and must still match the embedded game engine. More physical RAM allows higher graphics settings, but does not guarantee 120 FPS or prevent thermal throttling, memory pressure, or crashes.
+
 ## Set up your game files on iPhone or iPad
 
 FivePort does **not** download or provide GTA V game assets. You must supply files you have the rights to use, prepared for the compatible WebAssembly game port.
