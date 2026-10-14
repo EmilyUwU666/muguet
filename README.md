@@ -1,5 +1,42 @@
-# Muguet
-A native Mach-O iOS/macOS port of GTA V, with multiplayer
+# FivePort (iOS, based on Muguet)
+
+FivePort is a custom iOS build based on [Muguet](https://github.com/c22dev/muguet) by Constantin Clerc (c22dev). The original open-source license and contributors' credits are retained. This fork preserves the native Mach-O/Metal port and multiplayer support.
+
+## Set up your game files on iPhone or iPad
+
+FivePort does **not** download or provide GTA V game assets. You must supply files you have the rights to use, prepared for the compatible WebAssembly game port.
+
+**Recommended: import a game ZIP**
+
+1. In Files, find a ZIP containing `data/` and `b/<build-id>/shaders/`. The `data/` folder must contain `manifest.json` and all the assets referenced by that manifest; `shaders/` must contain `index.json` and its required shader packs.
+2. Open FivePort's launcher and choose **Import game data .zip**. Select the ZIP from Files and wait until the import completes. Keep the app open during import.
+3. If the file picker cannot access your ZIP, copy the ZIP to **Files → On My iPhone → FivePort**, reopen the launcher, and select the newly listed ZIP.
+4. When the launcher says the game data is ready, choose **Play**. For first-time troubleshooting, select **Battery** graphics and enable **Show frame rate**.
+
+**Alternative: copy the extracted folders manually**
+
+In **Files → On My iPhone → FivePort → game**, create the following layout:
+
+```text
+game/
+├── data/
+│   ├── manifest.json
+│   ├── common/
+│   ├── x64/
+│   └── ...other assets listed in manifest.json
+└── b/
+    └── <build-id>/
+        └── shaders/
+            ├── index.json
+            └── ...shader pack files
+```
+
+The build ID is whatever your compatible game export uses. The `data` and `b` directories must be immediately inside `game`, **not** inside an additional nested folder. Do not rename the build ID. The FivePort TestFlight build embeds precompiled game code, so you normally do **not** need to copy `game.wasm` into the iPhone app; this differs from ordinary Muguet source builds.
+
+**If Play is unavailable:** verify both `data/manifest.json` and `b/<build-id>/shaders/index.json` exist. **If Play opens a black screen:** ensure the entire asset export is present, not just the manifest and shaders. To see engine errors, open `muguet-debug.log` in the app's Files folder after trying to launch.
+
+The app's **How to set up game files** button displays these instructions on-device. If you previously installed this app under the old Muguet label, its Home Screen/Files name will change to FivePort after installing the updated TestFlight build.
+
 
 ## How does this work ?
 this whole port relies on the WebAssembly compilation of the game. in a browser, that `game.wasm` runs inside the JS engine, behind WebGPU, Web Audio, web workers...
