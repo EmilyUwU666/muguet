@@ -69,6 +69,24 @@ fn redirect_logs_if_detached() {
     }
 
     if cfg!(target_os = "ios") {
+        // A TestFlight build has no attached terminal. Save early startup,
+        // Wasmtime and Metal diagnostics where Files can access them.
+        let documents = support_dir();
+        if std::fs::create_dir_all(&documents).is_ok() {
+            let log_file = documents.join("muguet-debug.log");
+            if let Ok(file) = std::fs::OpenOptions::new()
+                .create(true).write(true).truncate(true).open(&log_file)
+            {
+                use std::os::fd::IntoRawFd;
+                let fd = file.into_raw_fd();
+                unsafe {
+                    dup2(fd, 1);
+                    dup2(fd, 2);
+                }
+                eprintln!("[diagnostics] Muguet iOS startup log");
+                eprintln!("[diagnostics] Log: {}", log_file.display());
+            }
+        }
         return;
     }
     let in_bundle = std::env::current_exe().map(|p| p.to_string_lossy().contains(".app/Contents/MacOS/")).unwrap_or(false);
